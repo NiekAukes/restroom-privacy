@@ -8,6 +8,10 @@ import audiocore
 import os
 import random
 import time
+from fairRand import FRand
+
+def get_fair_random_file(rand):
+    return open("/sd/" + rand.next(), "rb")
 
 # Opens and returns a random file from a list of files
 def get_random_file(files):
@@ -28,7 +32,9 @@ vfs = storage.VfsFat(sdcard)
 storage.mount(vfs, "/sd")
 # All the .wav files in the root directory
 files = list(filter(lambda f: f.endswith(".wav"), os.listdir("/sd")))
-file = get_random_file(files)
+rand = FRand(files, incrementor=lambda x: x + 1, reset=lambda x: 0)
+
+file = get_fair_random_file(rand)#get_random_file(files)
 
 # Open the I2S device
 speaker = audiobusio.I2SOut(board.GP0, board.GP1, board.GP2)
@@ -50,7 +56,7 @@ while True:
                 # Close the file that is currently open to avoid IOError
                 file.close()
 
-                file = get_random_file(files)
+                file = get_fair_random_file(rand)
 
                 # Process the wav file
                 file_playback = audiocore.WaveFile(file)
