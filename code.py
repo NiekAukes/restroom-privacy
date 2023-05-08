@@ -8,7 +8,57 @@ import audiocore
 import os
 import random
 import time
-from fairRand import FRand
+
+
+## Fair random file selection
+def getRanges(list):
+    acc = 0
+    ranges = []
+    for i in list:
+        ranges.append((acc, acc + i))
+        acc += i
+
+    return ranges
+# fair random number generator
+class FRand:
+    def __init__(self, values, incrementor=lambda x: x + 1, reset=lambda x: 0):
+        self.lastPicked = [1] * len(values)
+        self.values = values
+        self.incrementor = incrementor
+        self.reset = reset
+
+    
+    def next(self):
+        # get the sum of the last picked values
+        # the chance of picking a value is lastPicked[i]/sum(lastPicked)
+
+        # we emulate this by creating a list of ranges
+        # picking a random number between 0 and the sum of the values
+        # and then finding the index of the range that the random number falls in
+
+        # get the sum
+        s = sum(self.lastPicked)
+
+        ranges = getRanges(self.lastPicked)
+
+        # pick a random number between 0 and s - 1
+        r = random.randrange(s)
+
+        # increase all lastPicked values by a certain amount (defaulted to (+1))
+        self.lastPicked = list(map(self.incrementor, self.lastPicked))
+
+        # find the index of the range that the random number falls in
+        for i, range in enumerate(ranges):
+            if r >= range[0] and r < range[1]:
+                self.lastPicked[i] = self.reset(self.lastPicked[i])
+                return self.values[i]            
+            
+
+        # if we get here, something went wrong
+        print("Error: random number not found in range")
+        print("Random number: " + str(r))
+        print("Ranges: " + str(ranges))
+        print("sum: " + str(s))
 
 def get_fair_random_file(rand):
     return open("/sd/" + rand.next(), "rb")
