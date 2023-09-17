@@ -5,6 +5,7 @@ import sdcardio
 import audiobusio
 import storage
 import audiocore
+import alarm
 import os
 import random
 import time
@@ -51,8 +52,8 @@ class FRand:
         for i, range in enumerate(ranges):
             if r >= range[0] and r < range[1]:
                 self.lastPicked[i] = self.reset(self.lastPicked[i])
-                return self.values[i]            
-            
+                return self.values[i]
+
 
         # if we get here, something went wrong
         print("Error: random number not found in range")
@@ -68,14 +69,18 @@ def get_random_file(files):
     random_name = "/sd/" + files[random.randrange(len(files))]
     return open(random_name, "rb")
 
+
+# Button backlight and amp power
+power_enable = DigitalInOut(board.GP28)
+power_enable.switch_to_output(value=True)
+
 # SPI for the SD card
 spi = busio.SPI(board.GP10, board.GP11, board.GP12)
 cs = board.GP13
 
 # Button
 button = DigitalInOut(board.GP6)
-button.direction = Direction.INPUT
-button.pull = Pull.UP
+button.switch_to_input(pull=Pull.UP)
 
 sdcard = sdcardio.SDCard(spi, cs)
 vfs = storage.VfsFat(sdcard)
@@ -90,11 +95,17 @@ file = get_fair_random_file(rand)#get_random_file(files)
 speaker = audiobusio.I2SOut(board.GP0, board.GP1, board.GP2)
 
 # Time in seconds
-DEBOUNCE_DELAY = 0.02
+DEBOUNCE_DELAY = 0.01
 HOLD_DELAY = 1.0
+TIME_UNTIL_SLEEP = 30
+
+sleep_time = time.monotonic()
 last_time = time.monotonic()
 previous_button_value = True
 hold_triggered = False
+
+print("Before loop")
+
 while True:
     current_time = time.monotonic()
     current_button_value = button.value
@@ -123,4 +134,15 @@ while True:
     # Check whether the hold was triggered before to avoid triggering it on the next loop
     if not hold_triggered and not current_button_value and current_time - last_time > HOLD_DELAY:
         hold_triggered = True
+        sleep_time = time.monotonic()
         speaker.stop()
+
+    # Check whether or not we can enter deep sleep
+    if not speaker.playing and current_time - sleep_time > TIME_UNTIL_SLEEP:
+        print("Entering sleep")
+        button.deinit()
+        power_enable.value = False
+        button_pressed_alarm = alarm.pin.PinAlarm(pin=board.GP6, value=False, edge=True, pull=True)
+        alarm.exit_and_deep_sleep_until_alarms(button_pressed_alarm)
+
+    time.sleep(0.005)
